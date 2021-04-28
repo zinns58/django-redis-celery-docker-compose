@@ -1,0 +1,54 @@
+version: "3.8"
+
+services:
+
+  web:
+    build:
+      context: ./project
+      dockerfile: Dockerfile
+      args:
+        DJANGO_CONFIGURATION: 'deploy'
+    volumes:
+      - ./project:/usr/src/app
+    depends_on:
+      - redis
+    links:
+      - redis
+    restart: always
+
+  celery:
+    build:
+      context: ./project
+      dockerfile: Dockerfile.celery
+      args:
+        DJANGO_CONFIGURATION: 'deploy'
+    environment:
+      - DEBUG=1
+      - DJANGO_ALLOWED_HOSTS=localhost 127.0.0.1 [::1]
+    volumes:
+      - ./project:/usr/src/app
+    command: celery -A config.celery worker -l info
+    depends_on:
+      - redis
+      - web
+    links:
+      - redis
+      - web
+    restart: always
+
+  proxy:
+    image: nginx:alpine
+    ports:
+      - "8082:8082"
+    volumes:
+      - ./project:/usr/src/app
+      - ./proxy/conf.d/default.conf:/etc/nginx/conf.d/default.conf
+    depends_on:
+      - web
+    links:
+      - web
+    restart: always
+
+  redis:
+    image: redis:5-alpine
+    restart: always
